@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Lawn Mower  Tracker</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+  <style>
+    html, body {height: 100%; margin: 0; font-family: 'Segoe UI', Arial, sans-serif; background: #f3f6fb; overflow: hidden;}
+    #login-overlay {
+      position: fixed; inset:0; background:rgba(22,54,112,.91); z-index:10000; display:flex; align-items:center; justify-content:center;
+    }
+    #login-modal {
+      background:#fff; max-width:350px; width:90vw; margin:auto; border-radius:16px; box-shadow:0 6px 60px #0005; padding: 34px 18px 20px 18px; text-align:center;
+    }
+    #login-modal h2 {margin:0 0 19px 0; color:#1742a6;}
+    #login-modal input[type="text"] {font-size:1.08em; width:88%; padding:10px; border-radius:8px; border:1.6px solid #a2bae5; margin-bottom:25px;}
+    #login-modal button {font-size:1.02em; background:#2253e0; color:#fff; border:none; border-radius:8px; font-weight:600; padding:10px 35px; cursor:pointer;}
+    #login-modal button:hover {background:#153191;}
+    #login-error {color:#b22;font-size:1em;margin-top:5px;margin-bottom:-9px;}
+    #container {display: flex; flex-direction: row; height: 100vh; min-height: 600px;}
+    #sidebar {width: 415px; min-width: 280px; max-width: 540px; background: #fff; box-shadow: 2px 0 8px #e0e0eb44; padding: 0; display: flex; flex-direction: column; position: relative; transition: width 0.3s; overflow-x: hidden; z-index:2;}
+    #sidebar.fullwidth {width: 100vw !important; max-width: none; min-width: 0;}
+    #sidebar-content {display: flex; flex-direction: column; height: 100vh; padding: 22px 12px 12px 26px;}
+    .sidebar-actions {display:flex;gap:9px;margin-bottom:8px;flex-wrap:wrap;}
+    .sidebar-actions button {background:#2253e0;color:#fff;border:none;border-radius:8px;padding:9px 22px;font-weight:500;font-size:1em;cursor:pointer;transition:background .15s;}
+    .sidebar-actions button:hover {background:#153191;}
+    #userbar {display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+    #username-current {font-weight:bold;color: #1c336d; font-size:1.05em;}
+    #changeuser-btn {background: #2253e0; color:#fff; border:none; border-radius:8px; font-size:1em; padding:7px 18px 7px 18px; cursor:pointer; transition:background .15s;}
+    #changeuser-btn:hover {background:#153191;}
+    #jobform {background: #f5f7fa; border-radius: 10px; box-shadow: 0 1px 2px #d2cfdf22; padding: 18px 14px 12px 16px; margin-bottom: 18px;}
+    #jobform input, #jobform textarea, #jobform button, .job-edit input, .job-edit textarea, .job-edit select {
+        font-size: 1.06em; margin-bottom: 10px; width: 100%; padding:11px 9px; border-radius: 6px; border: 1px solid #cfdce7; box-sizing: border-box;
+    }
+    #jobform input:focus, #jobform textarea:focus, .job-edit input:focus, .job-edit textarea:focus, .job-edit select:focus { outline: 1.5px solid #8bbafe;}
+    #jobform textarea, .job-edit textarea { resize: vertical; min-height: 2.2em; max-height: 120px;}
+    #jobform button, .job-edit button {background: #2253e0; color: #fff; font-weight: bold; border: none; letter-spacing: .04em; box-shadow: 0 2px 8px #adc2da29; cursor: pointer; margin-top: 7px; border-radius:8px; padding:11px 0;}
+    #jobform button:hover, .job-edit button.save:hover { background: #153191;}
+    .job-edit button.cancel, .jobdetails-btn.cancel {background: #aaa !important; color:#fff; border-radius:8px;}
+    .job-edit button.cancel:hover, .jobdetails-btn.cancel:hover {background:#555 !important;}
+    .job-edit button.delete, .jobdetails-btn.delete {background:#d13a3a !important; color:#fff; border-radius:8px;}
+    .job-edit button.delete:hover, .jobdetails-btn.delete:hover {background:#810606 !important;}
+    .job-details-actions {display:flex; gap:10px; margin: 24px 0 10px 0;}
+    #autocomplete-list, .autocomplete-list-edit {position: relative; background:#fff; border:1px solid #d2dce8; max-height:120px; overflow:auto; border-radius:0 0 5px 5px;}
+    .autocomplete-item { padding: 7px 11px; cursor: pointer; }
+    .autocomplete-item:hover { background: #e6f0fa;}
+    .section-title {margin:0 0 9px 0; font-size:1.12em; color:#29468c; font-weight:600; letter-spacing:0.03em;}
+    .joblist {overflow-y: auto; max-height: 238px; min-height: 90px; margin-bottom: 5px; padding-right:4px; border-top:1.4px solid #f1f5fa;}
+    .jobcard {background:#fafdff; border-radius:8px; margin: 0 0 11px 0; padding:12px 10px 9px 15px; border:1.3px solid #dde6f1; box-shadow: 0 2px 8px #d2e1f32f; cursor:pointer; position:relative; transition:box-shadow .13s, border 0.13s; display: flex; flex-direction: column;}
+    .jobcard.selected { border:2.3px solid #2253e0; background:#e9f0fa;}
+    .jobcard .job-main { display: flex; align-items: center;  margin-bottom: 2px;}
+    .jobnum { font-weight:bold; background: #ebedfa; color: #334; border-radius: 6px; padding: 2px 8px; font-size: 1.01em; margin-right: 10px;}
+    .jobname { font-weight: 500; font-size:1.09em; color: #22334a;}
+    .jobstatus { margin-left:auto; font-size:1em;}
+    .badge { display: inline-block; font-size:.98em; color:#fff; border-radius: 8px; padding: 2px 9px;  vertical-align: middle;}
+    .badge.pending { background: #a1a1aa; }
+    .badge.in-progress { background: #f59e42;}
+    .badge.complete { background: #23b97e; }
+    .jobaddress { color: #597195; font-size: 0.94em; margin-bottom: 0; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;}
+    .jobdelivery { color:#1d3170; font-size:0.97em; margin-bottom: 3px;}
+    .job-notes-mini { font-size:0.97em; color:#888; padding-left:13px; padding-bottom:2px; max-width:75%; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;}
+    #jobdetails { background: #f3f7ff; border-radius: 12px; padding: 18px 24px 14px 18px; margin-top: 14px; margin-bottom: 10px; box-shadow: 0 1.5px 12px #bcd6fd25; font-size:1.05em; display: none;}
+    #jobdetails.active { display:block; }
+    #jobdetails h3 {margin:0 0 10px 0; font-size:1.14em;}
+    #jobdetails label {font-weight:600;}
+    #jobdetails textarea { width:100%; font-size:1.02em; margin-top: 2px; border-radius:6px; border:1.2px solid #b9d6f7;}
+    #editlog {margin-top: 20px; background: #eef6fb; border-radius:9px; font-size:.97em; font-family:Menlo,monospace; color:#334; padding:10px 16px 7px 18px;}
+    .editlog-entry {margin-bottom:7px;}
+    .editlog-meta {color:#2064b2;font-weight:bold;padding-right:5px;}
+    .editlog-fields {display:inline; color:#845b1a;}
+    .editlog-vals {color:#348d60}
+    .btn-row {display:flex; gap:12px; margin-top:9px;}
+    #edit-job-error {color:#b33; font-size:1em; background:#fff4f0; border:1px solid #fdcccc; border-radius:5px; padding:5px 9px;margin:7px 0;}
+    #edit-job-success {color:#0e8854; font-size:1em; background:#e9f7f0; border:1px solid #b7e3d0; border-radius:5px; padding:5px 9px;margin:7px 0;}
+    #delete-job-error {color:#b33;font-size:.96em; margin-top:7px;margin-bottom:-5px;}
+    @media (max-width: 820px) { #sidebar { width: 100vw; max-width:none; min-width: unset;} #sidebar-content {padding: 12px 7vw 10px 5vw; height: 97vh;} #collapse-map-btn-vertical {top: 105px;} #jobdetails {padding: 11px 3vw;} }
+    @media (max-width:650px){ #sidebar-content{padding:8px 2vw;} #collapse-map-btn-vertical{top:88px;} }
+    #map-container { flex:1; transition: none; }
+    #map { width: 100%; height: 100%; }
+    /* Better vertical side button styling */
+    #collapse-map-btn-vertical {
+      position: absolute; right: -20px; top: 50%; z-index:10;
+      transform: translateY(-50%);
+      background: #2253e0; border: none; color: #fff; border-radius: 26px;
+      box-shadow: 0 1px 9px #5d93d16c;
+      font-size: 1.06em; font-weight: 600;
+      padding: 19px 10px; cursor:pointer;
+      writing-mode: vertical-lr; text-orientation: upright; letter-spacing: .04em;
+      transition: background .15s;
+    }
+    #collapse-map-btn-vertical:hover { background: #153191;}
+    #osm-credit {font-size:.93em;color:#7c8899; text-align:center; margin-top:7px;}
+    #robot-status {background: #f4f7fa; border-top: 1.5px solid #e2e5ea; padding: 12px 36px; font-size:1.05em;}
+  </style>
+</head>
+<body>
+  <div id="login-overlay" style="display:none;">
+    <form id="login-modal" autocomplete="off">
+      <h2>Sign In</h2>
+      <input type="text" id="login-username" placeholder="Your Name" required />
+      <div id="login-error" style="display:none;"></div>
+      <button type="submit">Sign In</button>
+    </form>
+  </div>
+  <div id="container" style="display:none;">
+    <div id="sidebar">
+      <!-- Side vertical button for collapsing -->
+      <button id="collapse-map-btn-vertical" aria-expanded="false" title="Hide map">Hide Map</button>
+      <div id="sidebar-content">
+        <div id="userbar">
+          <span>Current User:</span>
+          <span id="username-current"></span>
+          <button id="changeuser-btn" type="button">Change</button>
+        </div>
+        <div class="sidebar-actions">
+          <button id="export-logs-btn">Export Logs</button>
+          <button id="export-csv-btn">Export CSV</button>
+          <input type="file" id="import-logs-input" style="display:none">
+          <button id="import-logs-btn">Import Logs</button>
+        </div>
+        <h2 style="margin:0 0 14px 0; font-weight:700; letter-spacing:.01em">Lawn Mower Jobs</h2>
+        <form id="jobform" autocomplete="off">
+          <div class="section-title">Add New Job</div>
+          <input type="text" id="jobnumber" placeholder="Job Number (e.g. 101A)" required autocomplete="off"/>
+          <input type="text" id="jobname" placeholder="Job Name" required autocomplete="off"/>
+          <input type="text" id="deliveryperson" placeholder="Delivery Person" required autocomplete="off"/>
+          <div style="position:relative;">
+            <input type="text" id="jobaddress" placeholder="Job Address (start typing...)" required autocomplete="off"/>
+            <div id="autocomplete-list"></div>
+          </div>
+          <textarea id="jobnotes" rows="2" placeholder="Notes (optional, e.g. obstacles, gate code, etc.)"></textarea>
+          <button type="submit">Add Job</button>
+          <div id="error-message" style="display:none;"></div>
+          <div id="success-message" style="display:none;"></div>
+        </form>
+        <div class="sidebar-scrollarea">
+          <div class="section-title" style="margin-top:0;">Current Jobs</div>
+          <div class="joblist" id="joblist"></div>
+          <div id="jobdetails"></div>
+        </div>
+        <div id="osm-credit">Search powered by OpenStreetMap Nominatim</div>
+      </div>
+    </div>
+    <div id="map-container" style="flex:1;">
+      <div id="map"></div>
+    </div>
+  </div>
+  <div id="robot-status" style="display:none; background: #f4f7fa; border-top: 1.5px solid #e2e5ea; padding: 12px 36px; font-size:1.04em;">
+    <b>Robot Status:</b> <span id="robot-info"></span>
+  </div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script>
+    let currentUser = null;
+    function setUser(name){
+      currentUser = name;
+      localStorage.setItem('rtktracker-username', name);
+      document.getElementById('username-current').textContent = currentUser;
+      document.getElementById('deliveryperson').value = currentUser;
+    }
+    function showAppUi(){
+      document.getElementById('container').style.display = "";
+      document.getElementById('login-overlay').style.display = "none";
+      document.getElementById('robot-status').style.display = "";
+      if(!window._mapInitialized) { setTimeout(initMap,50); window._mapInitialized = true; }
+    }
+    function showLoginUi(){
+      document.getElementById('container').style.display = "none";
+      document.getElementById('login-overlay').style.display = "";
+      document.getElementById('robot-status').style.display = "none";
+      document.getElementById('login-username').focus();
+    }
+    function handleLogin(name){
+      setUser(name);
+      showAppUi();
+      renderJobs();
+      renderRobot();
+    }
+    window.onload = function(){
+      let name = localStorage.getItem('rtktracker-username') || "";
+      if(name.trim().length > 1){
+        setUser(name); showAppUi();
+      } else {
+        showLoginUi();
+      }
+    };
+    document.getElementById('login-modal').onsubmit = function(e){
+      e.preventDefault();
+      let name = document.getElementById('login-username').value.trim();
+      document.getElementById('login-error').style.display = "none";
+      if(!name){ document.getElementById('login-error').textContent = "Name required."; document.getElementById('login-error').style.display = ""; return;}
+      handleLogin(name);
+    };
+    document.getElementById('changeuser-btn').onclick = function(){
+      showLoginUi();
+    };
+    // Data
+    let jobs = [
+      {id:1, number:"001", name:"Smith's Lawn", address:"123 Main St, Mountain View, CA", deliveryPerson:"Sarah James", coordinates:{lat:37.422, lng:-122.084}, status:'pending', assignedTo:null, notes:"Leave mower near side gate.", editLog: [{user:"Sarah James", type:"created", fields:["All"], from:{}, to:{number:"001",name:"Smith's Lawn",address:"123 Main St, Mountain View, CA",deliveryPerson: "Sarah James", notes:"Leave mower near side gate."}, time:Date.now()-8400000}]},
+      {id:2, number:"002", name:"Parkside", address:"456 Park Ave, Mountain View, CA", deliveryPerson:"Roberto Garcia", coordinates:{lat:37.4215,lng:-122.082}, status:'in-progress', assignedTo:1, notes:"Watch out for sprinkler heads.", editLog: [{user:"Roberto Garcia", type:"created", fields:["All"], from:{}, to:{number:"002",name:"Parkside",address:"456 Park Ave, Mountain View, CA",deliveryPerson:"Roberto Garcia", notes:"Watch out for sprinkler heads."}, time:Date.now()-6100000}]},
+      {id:3, number:"003", name:"Jones Family", address:"789 Oak Rd, Mountain View, CA", deliveryPerson:"Rachel Grant", coordinates:{lat:37.423,lng:-122.086}, status:'complete', assignedTo:2, notes:"Code to unlock gate: #2468", editLog: [{user:"Rachel Grant", type:"created", fields:["All"], from:{}, to:{number:"003",name:"Jones Family",address:"789 Oak Rd, Mountain View, CA",deliveryPerson:"Rachel Grant", notes:"Code to unlock gate: #2468"}, time:Date.now()-3400000}]}
+    ];
+    let mowers = [
+      {id: 1, label:'LawnBotA', location:{lat:37.421, lng:-122.083}, assignedJob:2, active:true},
+      {id: 2, label:'LawnBotB', location:{lat:37.425, lng:-122.0821}, assignedJob:3, active:false}
+    ];
+    let jobIdCounter = 4, mowerIdCounter=3, robot = {label:"LawnBotA", currentLocation:{lat:37.421, lng:-122.083}, deliveredBy:"John Doe", currentJob:2}, map, markers, icons, jobMarkerMap = new Map(), mowerMarkerMap = new Map(), selectedJobId = null, mapCollapsed = false, editMode = false;
+    function initMap(){
+      map = L.map('map').setView([37.42, -122.08], 15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+      markers = L.markerClusterGroup();
+      map.addLayer(markers);
+      icons = {
+        robot: L.icon({iconUrl:'https://upload.wikimedia.org/wikipedia/commons/6/6c/Robot_icon.svg',iconSize:[32,32]}),
+        mower: L.icon({iconUrl:'https://cdn-icons-png.flaticon.com/128/880/880594.png',iconSize:[26,26]}),
+        pending: L.divIcon({className:'badge pending', html:'<b>⏳</b>',iconSize:[22,22]}),
+        'in-progress': L.divIcon({className:'badge in-progress', html:'<b>🚀</b>',iconSize:[22,22]}),
+        complete: L.divIcon({className:'badge complete', html:'<b>✅</b>',iconSize:[22,22]}),
+      };
+      renderJobs();
+      renderRobot();
+    }
+    // Autocomplete
+    const autocompleteInput = document.getElementById('jobaddress'), autocompleteList = document.getElementById('autocomplete-list');
+    autocompleteInput.addEventListener('input', function() { setupAutocomplete(this.value, autocompleteList, autocompleteInput); });
+    document.addEventListener('click', e => { if(e.target!==autocompleteInput) autocompleteList.innerHTML = ''; });
+    function setupAutocomplete(val, tgtList, tgtInput){
+      tgtList.innerHTML = '';
+      if(val.trim().length<4) return;
+      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val)}&addressdetails=1&limit=5`)
+        .then(resp => resp.json()).then(items => {
+          tgtList.innerHTML = '';
+          items.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'autocomplete-item';
+            div.textContent = (item.display_name || '').slice(0, 80);
+            div.onclick = function() {
+              tgtInput.value = item.display_name;
+              tgtList.innerHTML = '';
+            };
+            tgtList.appendChild(div);
+          });
+        });
+    }
+    // Export/Import/CSV
+    document.getElementById('export-logs-btn').onclick = function() {
+      const blob = new Blob([JSON.stringify(jobs,null,2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob); triggerDownload(url, 'lawnmowerjobs-logs.json');
+    };
+    document.getElementById('export-csv-btn').onclick = function(){
+      const head = ["Job #","Name","Address","Delivery Person","Status","Assigned Mower","Notes","Last Changed By","Last Changed","Change Details"];
+      let rows = [];
+      for(let job of jobs){
+        let mowerName = job.assignedTo ? (mowers.find(m=>m.id===job.assignedTo)?.label||"") : "";
+        let logs = job.editLog&&job.editLog.length ? job.editLog : [{user:"-",type:"-",fields:[],from:{},to:{},time:""}];
+        for (let log of logs){
+          rows.push([
+            job.number, job.name, job.address, job.deliveryPerson, job.status, mowerName,
+            job.notes ? job.notes.replace(/\n/g,"\\n") : "",
+            log.user,
+            log.time ? new Date(log.time).toISOString() : "",
+            log.type + (log.fields && log.fields.length ? " ["+log.fields.join(",")+"]":"") +
+              (log.from && log.to && log.fields && log.fields[0]!=="All"
+                 ? log.fields.map(f=>" ["+f+":"+JSON.stringify(log.from[f])+"→"+JSON.stringify(log.to[f]) + "]").join("") : "")
+          ].map(x=>`"${(x||"").toString().replace(/"/g,'""')}"`).join(","));
+        }
+      }
+      const csv = head.map(x=>`"${x}"`).join(",") + "\n" + rows.join("\n");
+      const blob = new Blob([csv], {type:'text/csv'}), url = URL.createObjectURL(blob);
+      triggerDownload(url, 'lawnmowerjobs.csv');
+    };
+    function triggerDownload(url, filename){
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 800);
+    }
+    document.getElementById('import-logs-btn').onclick = function() {
+      document.getElementById('import-logs-input').click();
+    };
+    document.getElementById('import-logs-input').onchange = function(e) {
+      const file = this.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt){
+        try {
+          const imported = JSON.parse(evt.target.result);
+          if(!Array.isArray(imported)) throw new Error("Invalid format");
+          for (const importedJob of imported) {
+            let idx = jobs.findIndex(j=>j.id===importedJob.id);
+            if(idx>-1){ jobs[idx] = importedJob; } else jobs.push(importedJob);
+          }
+          renderJobs();
+          alert("Import completed! ("+imported.length+" jobs)");
+        } catch(err){ alert("Failed to import. Error: "+err.message);}
+        this.value = "";
+      }.bind(this);
+      reader.readAsText(file);
+    };
+    // Job Add/Edit/Render/Delete
+    document.getElementById('jobform').onsubmit = async function(e) {
+      e.preventDefault();
+      if(!currentUser) { showLoginUi(); document.getElementById('login-username').focus(); return;}
+      showMsg('',false); showMsg('',true);
+      let number = document.getElementById('jobnumber').value.trim(), name = document.getElementById('jobname').value.trim(), deliveryPerson = document.getElementById('deliveryperson').value.trim(), address = document.getElementById('jobaddress').value.trim(), notes = document.getElementById('jobnotes').value.trim();
+      if (!(number && name && deliveryPerson && address)) { showMsg('All fields except notes are required.',false); return; }
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`;
+        const resp = await fetch(url, {headers:{'Accept-Language': 'en','User-Agent':'LawnMowerApp/1.0'}});
+        const data = await resp.json();
+        if (!data.length) throw new Error("Address not found. Try a more complete address.");
+        const lat = parseFloat(data[0].lat), lng = parseFloat(data[0].lon);
+        let id = jobIdCounter++;
+        jobs.push({id, number, name, address, deliveryPerson, coordinates:{lat,lng}, status:'pending', assignedTo:null, notes, editLog: [{user: currentUser, type:"created", fields:["All"], from:{}, to:{number, name, address, deliveryPerson, notes}, time: Date.now()}]});
+        renderJobs();
+        showMsg('Job added!',true);
+        setTimeout(()=>showMsg('',true),1400);
+        this.reset(); document.getElementById('deliveryperson').value = currentUser;
+        autocompleteList.innerHTML = '';
+        selectJob(id);
+        if(!mapCollapsed && map) map.flyTo([lat, lng], 17, {animate:true, duration:0.7});
+      } catch (err) { showMsg(err.message || "Failed to geocode address.", false); }
+    };
+    function showMsg(msg, success) {
+      document.getElementById(success?'success-message':'error-message').style.display = msg?'block':'none';
+      document.getElementById(success?'success-message':'error-message').textContent = msg || '';
+    }
+    function renderJobs() {
+      document.getElementById('joblist').innerHTML = '';
+      if(markers) markers.clearLayers();
+      jobMarkerMap = new Map();
+      jobs.forEach(job => {
+        const jobDiv = document.createElement('div');
+        jobDiv.className = 'jobcard' + (selectedJobId===job.id ? ' selected':'');
+        jobDiv.tabIndex = 0; jobDiv.setAttribute('role','button'); jobDiv.setAttribute('aria-label',`Select job ${job.number}`);
+        jobDiv.onclick = () => selectJob(job.id);
+        let mowerLabel = '';
+        if(job.assignedTo) { const m = mowers.find(q=>q.id===job.assignedTo); if(m) mowerLabel = `<span style="color:#19965c;">&nbsp;[${m.label}]</span>`; }
+        let notesMini = job.notes ? `<span class="job-notes-mini">🗒 ${job.notes.slice(0,30)}${job.notes.length>30?'...':''}</span>` : '';
+        jobDiv.innerHTML = `
+          <div class="job-main">
+            <div class="jobnum">${job.number}</div>
+            <div class="jobname">${job.name}</div>
+            <span class="jobstatus badge ${job.status}">${job.status==='pending'?'⏳':job.status==='in-progress'?'🚀':'✅'} ${capitalize(job.status.replace('-',' '))}</span>
+          </div>
+          <div class="jobdelivery">🚚 ${job.deliveryPerson} ${mowerLabel}</div>
+          <div class="jobaddress">${job.address}</div>
+          ${notesMini}
+        `;
+        document.getElementById('joblist').appendChild(jobDiv);
+        if(job.coordinates && markers) {
+          const marker = L.marker([job.coordinates.lat, job.coordinates.lng], {icon: icons[job.status]})
+           .bindPopup(`<b>Job ${job.number}</b><br>${job.name}<br><span style="color:#1d3170;">🚚 ${job.deliveryPerson}</span>${mowerLabel}<br><small>${job.address}</small>${job.notes?`<div style="color:#556;font-size:1em;margin-top:6px;"><b>🗒 Notes:</b> ${job.notes}</div>`:""}<br>Status: <span class="badge ${job.status}">${capitalize(job.status.replace('-',' '))}</span>`);
+          marker.on('click', () => selectJob(job.id,true)); markers.addLayer(marker); jobMarkerMap.set(job.id, marker);
+        }
+      });
+      renderJobDetails();
+    }
+    function renderJobDetails() {
+      const panel = document.getElementById('jobdetails'); const job = jobs.find(j => j.id === selectedJobId);
+      if (!job) { panel.className = ""; panel.innerHTML = ""; editMode = false; return; }
+      let mowerName = job.assignedTo ? (mowers.find(m=>m.id===job.assignedTo)?.label||"") : "None";
+      if (!editMode) {
+        panel.className = "active";
+        panel.innerHTML = `
+          <h3>Job Details </h3>
+          <div class="job-details-actions">
+            <button id="editjobbtn" class="jobdetails-btn save" title="Edit">Edit</button>
+            <button id="deletejobbtn" class="jobdetails-btn delete" title="Delete">Delete</button>
+          </div>
+          <div><label>Job Number:</label> ${job.number}</div><div><label>Job Name:</label> ${job.name}</div>
+          <div><label>Delivery Person:</label> ${job.deliveryPerson}</div>
+          <div><label>Status:</label> <span class="badge ${job.status}" style="font-size:1em;">${capitalize(job.status.replace('-',' '))}</span></div>
+          <div><label>Address:</label> ${job.address}</div>
+          <div><label>Assigned Mower:</label> ${mowerName}</div>
+          <div><label>Lat/Lng:</label> ${job.coordinates ? job.coordinates.lat.toFixed(7)+", "+job.coordinates.lng.toFixed(7) : ''}</div>
+          <div style="margin-top:9px;"><label>Notes:</label><br>
+            <textarea rows="2" disabled style="background:#f1f3fa;">${job.notes||""}</textarea>
+          </div>
+          <div id="delete-job-error" style="display:none;"></div>
+          <div id="editlog">${renderEditLog(job.editLog||[])} </div>
+        `;
+        document.getElementById('editjobbtn').onclick = () => { editMode = true; renderJobDetails(); };
+        document.getElementById('deletejobbtn').onclick = function() {
+          if(!currentUser){ showLoginUi(); return;}
+          if(confirm("Are you sure you want to delete this job? This will be saved in the log.")){
+            job.editLog = job.editLog || [];
+            job.editLog.push({user: currentUser, type:"deleted", fields:["All"], from:{}, to:{}, time: Date.now()});
+            jobs = jobs.filter(j=>j.id !== job.id);
+            selectedJobId = null;
+            renderJobs();
+          }
+        };
+      } else {
+        panel.className = "active";
+        panel.innerHTML = `
+          <form id="editjobform" class="job-edit">
+            <span style="font-size:1.12em;font-weight:600;">Edit Job</span>
+            <div><input type="text" name="number" value="${job.number}"/></div>
+            <div><input type="text" name="name" value="${job.name}"/></div>
+            <div><input type="text" name="deliveryPerson" value="${job.deliveryPerson}"/></div>
+            <div>
+              <select name="status">
+                <option value="pending"${job.status==='pending'?' selected':''}>Pending</option>
+                <option value="in-progress"${job.status==='in-progress'?' selected':''}>In Progress</option>
+                <option value="complete"${job.status==='complete'?' selected':''}>Complete</option>
+              </select>
+            </div>
+            <div style="position:relative;">
+              <input type="text" name="address" id="editjobaddress" value="${job.address.replace(/"/g,'&quot;')}" autocomplete="off"/>
+              <div id="autocomplete-editjobaddress" class="autocomplete-list-edit"></div>
+            </div>
+            <div>
+              <textarea rows="2" name="notes">${job.notes||""}</textarea>
+            </div>
+            <div class="job-details-actions">
+              <button type="submit" class="jobdetails-btn save">Save</button>
+              <button type="button" class="jobdetails-btn cancel">Cancel</button>
+            </div>
+            <div id="edit-job-error" style="display:none"></div>
+            <div id="edit-job-success" style="display:none"></div>
+          </form>
+          <div id="editlog">${renderEditLog(job.editLog||[])} </div>
+        `;
+        const editAddr = document.getElementById('editjobaddress'), editList = document.getElementById('autocomplete-editjobaddress');
+        editAddr.addEventListener('input', function() { setupAutocomplete(this.value, editList, editAddr); });
+        document.getElementById('editjobform').onsubmit = async function(ev){
+          ev.preventDefault();
+          if(!currentUser) { showLoginUi(); return;}
+          let f = ev.target; let newNumber = f.number.value.trim(), newName = f.name.value.trim(), newDelivery = f.deliveryPerson.value.trim(), newStatus = f.status.value.trim(), newAddress = f.address.value.trim(), newNotes = f.notes.value.trim();
+          if (!(newNumber && newName && newDelivery && newAddress)) { showEditError("All fields except notes are required."); return; }
+          let changedFields = [], prevVals = {}, toVals = {};
+          if(newNumber!==job.number) { changedFields.push("number"); prevVals.number=job.number; toVals.number=newNumber; }
+          if(newName!==job.name) { changedFields.push("name"); prevVals.name=job.name; toVals.name=newName; }
+          if(newDelivery!==job.deliveryPerson) { changedFields.push("deliveryPerson"); prevVals.deliveryPerson=job.deliveryPerson; toVals.deliveryPerson=newDelivery; }
+          if(newStatus!==job.status) { changedFields.push("status"); prevVals.status=job.status; toVals.status=newStatus; }
+          if(newNotes!==job.notes) { changedFields.push("notes"); prevVals.notes=job.notes; toVals.notes=newNotes; }
+          let changedAddress = false; let coords = job.coordinates;
+          if(newAddress!==job.address) {
+            changedFields.push("address"); prevVals.address=job.address; toVals.address=newAddress; changedAddress = true;
+          }
+          if(changedFields.length===0){ editMode = false; renderJobDetails(); return; }
+          try {
+            if(changedAddress){
+              const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(newAddress)}`;
+              const resp = await fetch(url, {headers:{'Accept-Language': 'en','User-Agent':'LawnMowerApp/1.0'}});
+              const data = await resp.json();
+              if (!data.length) throw new Error("Address not found. Try a more complete address.");
+              coords = {lat:parseFloat(data[0].lat), lng:parseFloat(data[0].lon)};
+              prevVals.coordinates = job.coordinates; toVals.coordinates = coords;
+            }
+            job.number = newNumber; job.name = newName; job.deliveryPerson = newDelivery; job.status = newStatus; job.address = newAddress; job.coordinates = coords; job.notes = newNotes;
+            job.editLog = job.editLog || [];
+            job.editLog.push({user: currentUser, type:"edited", fields:changedFields, from:prevVals, to:toVals, time:Date.now()});
+            showEditSuccess("Updated!");
+            setTimeout(()=>{ editMode = false; renderJobs(); selectJob(job.id); },600);
+          } catch(err){ showEditError("Failed to geocode address."); }
+        };
+        document.querySelector('.job-edit .cancel').onclick = function(){ editMode = false; renderJobDetails(); };
+      }
+    }
+    function renderEditLog(editLog){
+      if(!editLog || !editLog.length) return "<span style='color:#888;'>No changes/history for this job.</span>";
+      return "<b>Change History:</b><br>" + editLog.slice().reverse().map(log=>{
+        let d = new Date(log.time), fieldsStr = log.fields && log.fields.length && log.fields[0]!=="All"
+          ? "<span class='editlog-fields'>[" + log.fields.join(", ") + "]</span>" : "";
+        let changes = "";
+        if(log.from && log.to && log.fields && log.fields[0]!=="All"){
+          changes = " ";
+          changes += log.fields.map(f=>`<span class='editlog-meta'>${f}:</span><span class='editlog-vals'>"${log.from[f]||""}"</span> → <span class='editlog-vals'>"${log.to[f]||""}"</span>`).join("<br>");
+        }
+        return `<div class='editlog-entry'><span class='editlog-meta'>${log.user} (${log.type})</span> ${fieldsStr} <span style='color:#789;'>${d.toLocaleString()}</span> <br>${changes}</div>`;
+      }).join("");
+    }
+    function showEditError(msg){ document.getElementById("edit-job-error").style.display=""; document.getElementById("edit-job-error").textContent=msg||"Edit error"; }
+    function showEditSuccess(msg){ document.getElementById("edit-job-success").style.display=""; document.getElementById("edit-job-success").textContent=msg||"Success"; }
+    function showDeleteError(msg){ let d=document.getElementById("delete-job-error"); d.style.display="";d.textContent=msg||"Delete error"; }
+    function selectJob(jobId, fromMap) {
+      selectedJobId = jobId;
+      renderJobs();
+      const job = jobs.find(j=>j.id===jobId);
+      if(job && job.coordinates && !mapCollapsed && map) {
+        map.flyTo([job.coordinates.lat, job.coordinates.lng], 17, {animate:true, duration:0.6});
+        if(jobMarkerMap.has(jobId)) setTimeout(()=>jobMarkerMap.get(jobId).openPopup(), fromMap?0:280);
+      }
+    }
+    function capitalize(s) { return s?s[0].toUpperCase() + s.slice(1):"";}
+    // Collapsible side map button
+    const mapContainer = document.getElementById('map-container');
+    const sidebar = document.getElementById('sidebar');
+    const collapseBtn = document.getElementById('collapse-map-btn-vertical');
+    collapseBtn.onclick = function(){
+      mapCollapsed = !mapCollapsed;
+      if(mapCollapsed){
+        mapContainer.style.display = "none"; sidebar.classList.add("fullwidth");
+        collapseBtn.textContent="Show Map"; collapseBtn.setAttribute("aria-expanded","true");
+      } else {
+        mapContainer.style.display = ""; sidebar.classList.remove("fullwidth");
+        collapseBtn.textContent="Hide Map"; collapseBtn.setAttribute("aria-expanded","false");
+        setTimeout(()=>{ if(map) map.invalidateSize(); },140);
+      }
+      document.getElementById('sidebar-content').scrollTop = 0;
+    };
+    function renderRobot(){
+      document.getElementById('robot-info').textContent =
+        `${robot.label} at [${robot.currentLocation.lat.toFixed(5)}, ${robot.currentLocation.lng.toFixed(5)}], delivered by ${robot.deliveredBy}`;
+    }
+  </script>
+</body>
+</html>
